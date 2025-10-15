@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/BTTH2/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/BTTH2/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/BTTH2/build" />
+      <excludeFolder url="file://$MODULE_DIR$/btth22/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/btth22/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/btth22/build" />
+      <excludeFolder url="file://$MODULE_DIR$/btth23/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/btth23/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/btth23/build" />
+      <excludeFolder url="file://$MODULE_DIR$/btth24/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/btth24/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/btth24/build" />
+      <excludeFolder url="file://$MODULE_DIR$/btth25/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/btth25/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/btth25/build" />
+      <excludeFolder url="file://$MODULE_DIR$/build" />
+    </content>
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Dart SDK" level="project" />
+    <orderEntry type="library" name="Dart Packages" level="project" />
+  </component>
+</module>
