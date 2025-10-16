@@ -1,11 +1,9 @@
-<?php
-
+<?php 
+// routes/api.php
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ProductController;
-
-Route::get('/test', function () {
-    return response()->json(['message' => 'API hoạt động!']);
-});
-
+use App\Http\Controllers\Api\CategoryController;
+// Tự động tạo các route cho CRUD: GET, POST, PUT, DELETE,...
 Route::apiResource('products', ProductController::class);
+Route::apiResource('categories', CategoryController::class);
