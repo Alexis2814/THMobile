@@ -1,11 +1,11 @@
 // lib/helpers/database_helper.dart
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/order.dart';
 
 class DatabaseHelper {
-  // Đảm bảo chỉ có một instance của DatabaseHelper (Singleton pattern)
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
   DatabaseHelper._init();
@@ -19,7 +19,6 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-
     return await openDatabase(path, version: 1, onCreate: _createDB);
   }
 
@@ -43,14 +42,12 @@ class DatabaseHelper {
     ''');
   }
 
-  // Thêm một đơn hàng mới
   Future<Order> create(Order order) async {
     final db = await instance.database;
     final id = await db.insert('orders', order.toMap());
     return order.copyWith(id: id);
   }
 
-  // Đọc một đơn hàng theo ID
   Future<Order> readOrder(int id) async {
     final db = await instance.database;
     final maps = await db.query(
@@ -67,21 +64,54 @@ class DatabaseHelper {
     }
   }
 
-  // Đọc tất cả đơn hàng (có thể tìm kiếm)
-  Future<List<Order>> readAllOrders({String query = ''}) async {
+  // ==========================================================
+  // HÀM QUAN TRỌNG ĐÃ ĐƯỢC CẬP NHẬT ĐỂ LỌC
+  // ==========================================================
+  Future<List<Order>> readAllOrders({
+    String query = '',
+    DateTimeRange? dateRange,
+    String? paymentMethod,
+  }) async {
     final db = await instance.database;
 
-    final result = (query.isEmpty)
-        ? await db.query('orders', orderBy: '${OrderFields.deliveryDate} DESC')
-        : await db.query('orders',
-        where: '${OrderFields.customerName} LIKE ?',
-        whereArgs: ['%$query%'],
-        orderBy: '${OrderFields.deliveryDate} DESC');
+    // Xây dựng câu lệnh WHERE và các tham số một cách linh hoạt
+    String? whereClause;
+    List<Object?> whereArgs = [];
+
+    // Thêm điều kiện tìm kiếm tên
+    if (query.isNotEmpty) {
+      whereClause = '${OrderFields.customerName} LIKE ?';
+      whereArgs.add('%$query%');
+    }
+
+    // Thêm điều kiện lọc theo ngày
+    if (dateRange != null) {
+      final startDate = dateRange.start.toIso8601String().substring(0, 10);
+      final endDate = dateRange.end.toIso8601String().substring(0, 10);
+      final dateCondition = "SUBSTR(${OrderFields.deliveryDate}, 1, 10) BETWEEN ? AND ?";
+
+      whereClause = whereClause == null ? dateCondition : '$whereClause AND $dateCondition';
+      whereArgs.addAll([startDate, endDate]);
+    }
+
+    // Thêm điều kiện lọc theo phương thức thanh toán
+    if (paymentMethod != null) {
+      final paymentCondition = '${OrderFields.paymentMethod} = ?';
+      whereClause = whereClause == null ? paymentCondition : '$whereClause AND $paymentCondition';
+      whereArgs.add(paymentMethod);
+    }
+
+    final result = await db.query(
+      'orders',
+      where: whereClause,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      orderBy: '${OrderFields.deliveryDate} DESC', // Luôn sắp xếp theo ngày mới nhất
+    );
 
     return result.map((json) => Order.fromMap(json)).toList();
   }
+  // ==========================================================
 
-  // Cập nhật một đơn hàng
   Future<int> update(Order order) async {
     final db = await instance.database;
     return db.update(
@@ -92,7 +122,6 @@ class DatabaseHelper {
     );
   }
 
-  // Xóa một đơn hàng
   Future<int> delete(int id) async {
     final db = await instance.database;
     return await db.delete(

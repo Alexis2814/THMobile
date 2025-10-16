@@ -1,12 +1,17 @@
 // lib/main.dart
+// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart'; // Thêm import này
 import 'screens/order_list_screen.dart';
 
-void main() {
-  // Đảm bảo các bindings của Flutter được khởi tạo trước khi chạy app
+void main() async { // Chuyển thành async
   WidgetsFlutterBinding.ensureInitialized();
+  // Khởi tạo localization cho Tiếng Việt
+  await initializeDateFormatting('vi_VN', null);
   runApp(const MyApp());
 }
+
+// ... class MyApp giữ nguyên
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

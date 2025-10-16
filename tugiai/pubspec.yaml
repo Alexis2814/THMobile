@@ -30,14 +30,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # Database
   sqflite: ^2.3.0
   path: ^1.8.3
 
-  # Tiện ích định dạng ngày tháng
+  # Tiện ích
   intl: ^0.18.1
-
-  # Để tạo ID duy nhất
   uuid: ^4.2.1
+
+  # Hai thư viện mới phải có ở đây
+  path_provider: ^2.1.1
+  permission_handler: ^11.0.1
+  collection: ^1.18.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
