@@ -3,17 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
-// --- CÁC HẰNG SỐ CỦA GAME ---
-const double BALL_SIZE = 50.0;
-const double TARGET_SIZE = 50.0;
-// Hệ số điều chỉnh tốc độ, càng lớn bi lăn càng nhanh
-const double SPEED_FACTOR = 4.0;
-// Ngưỡng va chạm: Khoảng cách giữa tâm hai vật thể để được coi là chạm
-const double COLLISION_THRESHOLD = 25.0;
-
 void main() {
-  // Đảm bảo Flutter binding đã được khởi tạo trước khi chạy ứng dụng
-  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -23,13 +13,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lăn Bi Thăng Bằng',
+      title: 'Game Lăn Bi',
+      // Thuộc tính theme chỉ chứa các dữ liệu về giao diện
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        useMaterial3: true,
-        // Cài đặt font Inter (giả định)
-        fontFamily: 'Inter',
       ),
+      // Đặt debugShowCheckedModeBanner ở đây là đúng
+      debugShowCheckedModeBanner: false,
       home: const BalanceGameScreen(),
     );
   }
@@ -43,258 +33,183 @@ class BalanceGameScreen extends StatefulWidget {
 }
 
 class _BalanceGameScreenState extends State<BalanceGameScreen> {
-  // --- VỊ TRÍ VÀ TRẠNG THÁI GAME ---
-  double _ballX = 0.0;
-  double _ballY = 0.0;
-  double _targetX = 0.0;
-  double _targetY = 0.0;
-  bool _isWin = false;
-  late StreamSubscription<AccelerometerEvent> _accelerometerSubscription;
+  // Kích thước của quả bi và đích
+  static const double _ballSize = 50.0;
+  static const double _targetSize = 60.0;
 
-  // Biến lưu kích thước màn hình để tính giới hạn
-  double _screenWidth = 0.0;
-  double _screenHeight = 0.0;
+  // Tọa độ của quả bi và đích
+  double? _ballX, _ballY;
+  double? _targetX, _targetY;
+
+  // Kích thước màn hình
+  double _screenWidth = 0;
+  double _screenHeight = 0;
+
+  // Stream subscription cho cảm biến
+  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+
+  // Biến kiểm tra xem game đã được khởi tạo chưa
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initGame();
-  }
+    // Bắt đầu lắng nghe sự kiện từ gia tốc kế
+    _accelerometerSubscription =
+        accelerometerEvents.listen((AccelerometerEvent event) {
+          if (!_isInitialized || _ballX == null) return;
 
-  // Khởi tạo trạng thái game: đặt bi ở giữa, đặt đích ngẫu nhiên
-  void _initGame() {
-    // Đảm bảo rằng việc lắng nghe cảm biến chỉ diễn ra sau khi game được khởi tạo
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _screenWidth = MediaQuery.of(context).size.width;
-      _screenHeight = MediaQuery.of(context).size.height;
+          // Cập nhật tọa độ X và Y của quả bi
+          setState(() {
+            // event.x điều khiển chuyển động ngang, event.y điều khiển dọc
+            // Dấu trừ (-) được dùng để đảo ngược hướng cho tự nhiên hơn
+            // Hệ số nhân (ví dụ: 2.5) để làm mượt và điều chỉnh tốc độ
+            _ballX = _ballX! - event.x * 2.5;
+            _ballY = _ballY! + event.y * 2.5;
 
-      setState(() {
-        // Đặt bi ở giữa màn hình
-        _ballX = (_screenWidth / 2) - (BALL_SIZE / 2);
-        _ballY = (_screenHeight / 2) - (BALL_SIZE / 2);
-        _setRandomTarget();
-        _isWin = false;
-      });
+            // Giới hạn để quả bi không đi ra ngoài màn hình
+            _clampBallPosition();
 
-      _startListeningToAccelerometer();
-    });
-  }
-
-  // Đặt đích (target) tại một vị trí ngẫu nhiên trên màn hình
-  void _setRandomTarget() {
-    final random = Random();
-
-    // Đảm bảo đích không nằm sát mép màn hình
-    _targetX = random.nextDouble() * (_screenWidth - TARGET_SIZE - 20) + 10;
-    _targetY = random.nextDouble() * (_screenHeight - TARGET_SIZE - 20) + 10;
-
-    // Tạm thời dừng lắng nghe để tránh cập nhật vị trí bi trong lúc đặt đích
-    _accelerometerSubscription.pause();
-    setState(() {});
-    _accelerometerSubscription.resume();
-  }
-
-  // Bắt đầu lắng nghe Gia tốc kế
-  void _startListeningToAccelerometer() {
-    // Lắng nghe Gia tốc kế
-    _accelerometerSubscription = accelerometerEvents.listen(
-          (AccelerometerEvent event) {
-        if (_isWin) return; // Không di chuyển bi khi đã thắng
-
-        // Cập nhật tọa độ trong setState
-        setState(() {
-          // Cập nhật vị trí X: event.x là độ nghiêng theo chiều ngang
-          // Dấu cộng (+) cho event.x thường làm bi di chuyển theo hướng nghiêng tự nhiên
-          _ballX += event.x * SPEED_FACTOR;
-
-          // Cập nhật vị trí Y: event.y là độ nghiêng theo chiều dọc (trước/sau)
-          // Dấu trừ (-) đảo ngược hướng để khi nghiêng về trước (âm) bi đi lên
-          _ballY -= event.y * SPEED_FACTOR;
-
-          // --- Logic Giới Hạn Tốc Độ & Biên Độ ---
-          // Clamping để bi không lăn ra ngoài màn hình
-          _ballX = _ballX.clamp(0.0, _screenWidth - BALL_SIZE);
-          _ballY = _ballY.clamp(0.0, _screenHeight - BALL_SIZE);
-
-          // Kiểm tra điều kiện thắng sau mỗi lần cập nhật vị trí
-          _checkWinCondition();
+            // Kiểm tra điều kiện thắng
+            _checkWinCondition();
+          });
         });
-      },
-      onError: (e) {
-        // Xử lý lỗi nếu không có cảm biến
-        print('Accelerometer Error: $e');
-        // Có thể hiện SnackBar báo lỗi
-      },
-      cancelOnError: true,
-    );
   }
 
-  // Kiểm tra xem Quả bi đã chạm vào Đích chưa
-  void _checkWinCondition() {
-    // Tính toán tâm của Quả bi
-    final ballCenterX = _ballX + BALL_SIZE / 2;
-    final ballCenterY = _ballY + BALL_SIZE / 2;
+  // Hàm này được gọi khi các dependency của State thay đổi,
+  // và cũng được gọi sau initState. An toàn để lấy kích thước màn hình ở đây.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInitialized) {
+      final size = MediaQuery.of(context).size;
+      _screenWidth = size.width;
+      // Trừ đi chiều cao của AppBar và thanh trạng thái để quả bi không bị che
+      _screenHeight = size.height -
+          MediaQuery.of(context).padding.top -
+          kToolbarHeight;
 
-    // Tính toán tâm của Đích
-    final targetCenterX = _targetX + TARGET_SIZE / 2;
-    final targetCenterY = _targetY + TARGET_SIZE / 2;
-
-    // Tính khoảng cách Euclidean giữa hai tâm
-    final distance = sqrt(
-        pow(ballCenterX - targetCenterX, 2) +
-            pow(ballCenterY - targetCenterY, 2)
-    );
-
-    // Nếu khoảng cách nhỏ hơn ngưỡng va chạm (25.0), game kết thúc
-    if (distance < COLLISION_THRESHOLD && !_isWin) {
-      _isWin = true;
-      _showWinDialog();
+      // Khởi tạo vị trí ban đầu cho quả bi ở giữa màn hình
+      setState(() {
+        _ballX = (_screenWidth - _ballSize) / 2;
+        _ballY = (_screenHeight - _ballSize) / 2;
+        // Đặt đích ở một vị trí ngẫu nhiên
+        _randomizeTargetPosition();
+        _isInitialized = true;
+      });
     }
   }
 
-  // Hiển thị hộp thoại chiến thắng
-  void _showWinDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: Colors.white,
-          title: const Text('🎉 Chúc mừng Chiến thắng! 🎉', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-          content: const Text('Bạn đã đưa quả bi vào đích thành công! Sẵn sàng cho vòng tiếp theo?', style: TextStyle(color: Colors.black87)),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Vòng mới', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-              onPressed: () {
-                Navigator.of(context).pop(); // Đóng hộp thoại
-                _resetGame();
-              },
-            ),
-          ],
-        );
-      },
-    );
+  void _clampBallPosition() {
+    // Giới hạn tọa độ X
+    if (_ballX! < 0) {
+      _ballX = 0;
+    } else if (_ballX! > _screenWidth - _ballSize) {
+      _ballX = _screenWidth - _ballSize;
+    }
+
+    // Giới hạn tọa độ Y
+    if (_ballY! < 0) {
+      _ballY = 0;
+    } else if (_ballY! > _screenHeight - _ballSize) {
+      _ballY = _screenHeight - _ballSize;
+    }
   }
 
-  // Đặt lại trò chơi (reset trạng thái thắng và đặt lại đích)
-  void _resetGame() {
+  void _randomizeTargetPosition() {
+    final random = Random();
     setState(() {
-      _isWin = false;
-      _setRandomTarget(); // Đặt đích ở vị trí ngẫu nhiên mới
+      // Tạo vị trí ngẫu nhiên trong phạm vi màn hình
+      _targetX = random.nextDouble() * (_screenWidth - _targetSize);
+      _targetY = random.nextDouble() * (_screenHeight - _targetSize);
     });
-    // Bi vẫn giữ nguyên vị trí, người chơi phải tiếp tục lăn
-    _accelerometerSubscription.resume();
+  }
+
+  void _checkWinCondition() {
+    if (_ballX == null || _targetX == null) return;
+
+    // Tính toán tâm của quả bi và đích
+    double ballCenterX = _ballX! + _ballSize / 2;
+    double ballCenterY = _ballY! + _ballSize / 2;
+    double targetCenterX = _targetX! + _targetSize / 2;
+    double targetCenterY = _targetY! + _targetSize / 2;
+
+    // Tính khoảng cách giữa hai tâm
+    double distance = sqrt(pow(ballCenterX - targetCenterX, 2) +
+        pow(ballCenterY - targetCenterY, 2));
+
+    // Nếu khoảng cách nhỏ hơn bán kính của đích, tức là quả bi đã vào trong
+    if (distance < _targetSize / 2) {
+      // Hiển thị thông báo chiến thắng
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 Tuyệt vời! Bạn đã thắng! 🎉'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      // Di chuyển đích đến vị trí ngẫu nhiên mới
+      _randomizeTargetPosition();
+    }
   }
 
   @override
   void dispose() {
-    _accelerometerSubscription.cancel();
+    // Hủy đăng ký lắng nghe để tránh rò rỉ bộ nhớ
+    _accelerometerSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Cập nhật kích thước màn hình trong build
-    _screenWidth = MediaQuery.of(context).size.width;
-    _screenHeight = MediaQuery.of(context).size.height;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Lăn Bi Thăng Bằng',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        backgroundColor: Colors.blueAccent,
-        elevation: 4,
+        title: const Text('Game Lăn Bi Thăng Bằng'),
+        backgroundColor: Colors.blueGrey[800],
       ),
-      body: Container(
-        // Thiết lập giao diện thân thiện với thiết bị di động
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFE0F7FA), Color(0xFFB3E5FC)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Stack(
-          children: [
-            // --- 1. Đích (Target) ---
+      body: _isInitialized // Chỉ build game khi đã có kích thước màn hình
+          ? Stack(
+        children: [
+          // Cái Đích
+          if (_targetX != null && _targetY != null)
             Positioned(
               left: _targetX,
               top: _targetY,
               child: Container(
-                width: TARGET_SIZE,
-                height: TARGET_SIZE,
+                width: _targetSize,
+                height: _targetSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.grey.shade300, // Màu nền sáng
-                  border: Border.all(color: Colors.grey.shade700, width: 4), // Viền đậm
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.shade500.withOpacity(0.5),
-                      blurRadius: 8,
-                      offset: const Offset(2, 2),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(Icons.star, color: Colors.green, size: 30),
+                  border: Border.all(color: Colors.grey.shade600, width: 4),
+                  color: Colors.grey.withOpacity(0.3),
                 ),
               ),
             ),
-
-            // --- 2. Quả bi (Ball) ---
+          // Quả Bi
+          if (_ballX != null && _ballY != null)
             Positioned(
               left: _ballX,
               top: _ballY,
               child: Container(
-                width: BALL_SIZE,
-                height: BALL_SIZE,
-                decoration: BoxDecoration(
+                width: _ballSize,
+                height: _ballSize,
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  // Bi đổi màu khi thắng để có phản hồi thị giác
-                  color: _isWin ? Colors.green.shade600 : Colors.blue.shade600,
-                  gradient: LinearGradient(
-                    colors: [
-                      _isWin ? Colors.greenAccent : Colors.blueAccent,
-                      _isWin ? Colors.green.shade800 : Colors.blue.shade800,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Colors.lightBlueAccent,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(5, 5),
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(2, 2),
                     ),
                   ],
                 ),
               ),
             ),
-
-            // --- 3. Hiển thị Trạng thái (Tùy chọn) ---
-            if (_isWin)
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'ĐÃ CHẠM ĐÍCH!',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
+      )
+          : const Center(
+        child: CircularProgressIndicator(), // Hiển thị loading
       ),
     );
   }
